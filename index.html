@@ -135,17 +135,23 @@ function updateDepartment() {
     }
 }
 
-// 엑셀/CSV 파일을 JSON으로 파싱하는 유틸리티 함수
-function readFileAsJSON(file) {
+// 나이스(NEIS) 엑셀/CSV 양식을 메타데이터 포함 2차원 배열로 읽어오는 함수
+function readFileAs2DArray(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = function(e) {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, {type: 'array'});
-            const firstSheetName = workbook.SheetNames[0];
-            const sheet = workbook.Sheets[firstSheetName];
-            const json = XLSX.utils.sheet_to_json(sheet);
-            resolve(json);
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const firstSheetName = workbook.SheetNames[0];
+                const sheet = workbook.Sheets[firstSheetName];
+                
+                // header: 1 옵션을 주어 빈칸을 포함한 2차원 배열 그대로 가져옴
+                const rows = XLSX.utils.sheet_to_json(sheet, {header: 1, defval: ''});
+                resolve(rows);
+            } catch (err) {
+                reject(err);
+            }
         };
         reader.onerror = reject;
         reader.readAsArrayBuffer(file);
@@ -164,29 +170,76 @@ async function parseAndGroupFiles() {
     aggregatedStudentsData = {};
     let hasData = false;
 
-    document.getElementById("parseMessage").innerText = "데이터 취합 중입니다...";
+    document.getElementById("parseMessage").innerText = "나이스(NEIS) 데이터를 취합 중입니다...";
 
     for (let inputInfo of fileInputs) {
         const fileElement = document.getElementById(inputInfo.id);
         if (fileElement.files.length > 0) {
             try {
-                const data = await readFileAsJSON(fileElement.files[0]);
+                const rows = await readFileAs2DArray(fileElement.files[0]);
                 hasData = true;
                 
-                data.forEach(row => {
-                    // 키값 중 공백을 제거했을 때 '성명'인 컬럼 찾기 (예: '성 명', '성  명' 대응)
-                    const nameKey = Object.keys(row).find(k => k.replace(/\s/g, '') === '성명');
-                    
-                    if (nameKey && row[nameKey]) {
-                        const studentName = row[nameKey].trim();
-                        // 해당 학생 데이터가 없으면 초기화
-                        if (!aggregatedStudentsData[studentName]) {
-                            aggregatedStudentsData[studentName] = { '인적사항': [], '교과세특': [], '창체세특': [], '행특세특': [] };
+                let headerRowIdx = -1;
+                let nameColIdx = -1;
+
+                // 1. 위쪽 빈칸/메타데이터를 무시하고 실제 '성명' 헤더 위치 찾기
+                for (let r = 0; r < rows.length; r++) {
+                    for (let c = 0; c < rows[r].length; c++) {
+                        if (String(rows[r][c]).replace(/\s/g, '') === '성명') {
+                            headerRowIdx = r;
+                            nameColIdx = c;
+                            break;
                         }
-                        // 각 분류에 데이터 삽입
-                        aggregatedStudentsData[studentName][inputInfo.key].push(row);
                     }
-                });
+                    if (nameColIdx !== -1) break;
+                }
+
+                if (nameColIdx !== -1 && headerRowIdx !== -1) {
+                    const headers = rows[headerRowIdx];
+                    let currentStudentName = "";
+
+                    // 2. 헤더 다음 행부터 순회하며 데이터 적재
+                    for (let r = headerRowIdx + 1; r < rows.length; r++) {
+                        const row = rows[r];
+                        let cellValue = String(row[nameColIdx] || '').trim();
+
+                        // 페이지 넘김으로 인해 헤더가 다시 등장하는 경우 무시
+                        if (cellValue.replace(/\s/g, '') === '성명' || String(row[0]||'').replace(/\s/g, '') === '번호') {
+                            continue;
+                        }
+
+                        // 나이스 엑셀의 이름 셀 병합 대응: 성명 칸이 비어있으면 직전 학생의 이름 유지
+                        if (cellValue !== "") {
+                            // "김 건" 처럼 이름 사이에 있는 띄어쓰기를 모두 제거하여 일관성 유지
+                            currentStudentName = cellValue.replace(/\s/g, '');
+                        }
+
+                        if (currentStudentName !== "") {
+                            if (!aggregatedStudentsData[currentStudentName]) {
+                                aggregatedStudentsData[currentStudentName] = { '인적사항': [], '교과세특': [], '창체세특': [], '행특세특': [] };
+                            }
+                            
+                            let rowData = {};
+                            let isEmptyRow = true;
+
+                            // 해당 줄의 데이터를 묶어주기
+                            for (let c = 0; c < headers.length; c++) {
+                                let key = String(headers[c] || '').trim();
+                                if (!key) key = `항목${c+1}`; // 헤더가 빈칸일 경우 대비
+                                
+                                rowData[key] = row[c];
+                                if (String(row[c]).trim() !== "") {
+                                    isEmptyRow = false; // 데이터가 하나라도 있으면 빈 줄 아님
+                                }
+                            }
+                            
+                            // 완전히 빈 줄(페이지 여백 등)이 아니라면 추가
+                            if (!isEmptyRow) {
+                                aggregatedStudentsData[currentStudentName][inputInfo.key].push(rowData);
+                            }
+                        }
+                    }
+                }
             } catch (err) {
                 console.error("파일 파싱 오류:", err);
                 alert(`${inputInfo.key} 파일 처리 중 오류가 발생했습니다.`);
@@ -203,6 +256,7 @@ async function parseAndGroupFiles() {
     const studentSelect = document.getElementById("studentSelect");
     studentSelect.innerHTML = "<option value=''>평가할 학생을 선택하세요</option>";
     
+    // 학생 이름 가나다 순 정렬
     const studentNames = Object.keys(aggregatedStudentsData).sort();
     studentNames.forEach(name => {
         studentSelect.innerHTML += `<option value='${name}'>${name}</option>`;

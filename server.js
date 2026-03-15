@@ -2,16 +2,31 @@
 const express = require('express');
 const cors = require('cors');
 const { GoogleGenerativeAI } = require('@google/genai');
+const path = require('path');
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' })); // 대용량 텍스트(엑셀 데이터) 처리용
 
-// Gemini API 설정 (본인의 API 키 입력)
-const ai = new GoogleGenerativeAI({ apiKey: 'AIzaSyCa0-Xn6cii7B8PcUndaS04ZMXL1QJlXCw' });
+// 현재 폴더의 파일들(index.html 등)을 웹에서 접근할 수 있도록 서빙합니다.
+app.use(express.static(__dirname));
+
+// ★ 수정됨: 하드코딩된 API 키를 제거하고 환경 변수(Environment Variables)를 사용합니다.
+// Render 환경 변수 설정에서 GEMINI_API_KEY 값을 입력해야 정상 작동합니다.
+const apiKey = process.env.GEMINI_API_KEY;
+
+if (!apiKey) {
+    console.warn("⚠️ 경고: GEMINI_API_KEY 환경 변수가 설정되지 않았습니다. AI 평가가 작동하지 않을 수 있습니다.");
+}
+
+const ai = new GoogleGenerativeAI({ apiKey: apiKey });
 
 app.post('/api/evaluate', async (req, res) => {
     const { university, category, department, studentData } = req.body;
+
+    if (!apiKey) {
+        return res.status(500).json({ error: '서버에 API 키가 설정되지 않았습니다. 관리자에게 문의하세요.' });
+    }
 
     // 12개 대학 및 엄격한 평가 룰셋이 적용된 시스템 프롬프트
     const systemPrompt = `
@@ -64,5 +79,6 @@ ${JSON.stringify(studentData, null, 2)}
     }
 });
 
-const PORT = 3000;
-app.listen(PORT, () => console.log(`서버가 http://localhost:${PORT} 에서 실행 중입니다.`));
+// Render가 제공하는 동적 포트를 우선적으로 사용합니다.
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`서버가 포트 ${PORT} 에서 실행 중입니다.`));

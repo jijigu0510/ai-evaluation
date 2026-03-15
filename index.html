@@ -156,7 +156,7 @@ async function evaluateStudent() {
     const department = document.getElementById("department").value;
     const fileInput = document.getElementById("excelFile");
 
-    if(!university || !category || !department || !fileInput.files) {
+    if(!university || !category || !department || !fileInput.files || fileInput.files.length === 0) {
         alert("대학, 계열, 학과, 그리고 엑셀 파일을 모두 선택해주세요.");
         return;
     }
@@ -164,7 +164,7 @@ async function evaluateStudent() {
     document.getElementById("loading").style.display = "block";
     document.getElementById("resultArea").style.display = "none";
 
-    const file = fileInput.files;
+    const file = fileInput.files[0];
     const reader = new FileReader();
 
     reader.onload = async function(e) {
@@ -181,22 +181,28 @@ async function evaluateStudent() {
 
         // 백엔드 API로 데이터 전송
         try {
-            const response = await fetch('http://localhost:3000/api/evaluate', {
+            // ★ 수정됨: localhost 하드코딩을 제거하고 상대경로로 변경했습니다.
+            // 이렇게 하면 로컬 환경과 배포 환경 모두에서 알맞은 주소로 요청이 갑니다.
+            const response = await fetch('/api/evaluate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ university, category, department, studentData })
             });
 
+            if (!response.ok) {
+                 throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
             const resultData = await response.json();
             
             document.getElementById("loading").style.display = "none";
             document.getElementById("resultArea").style.display = "block";
-            // 마크다운 형태의 반환값을 표시 (필요시 marked.js 등으로 HTML 렌더링 가능)
+            // 마크다운 형태의 반환값을 표시
             document.getElementById("resultArea").innerText = resultData.result;
 
         } catch (error) {
             console.error(error);
-            alert("서버 오류가 발생했습니다.");
+            alert("서버 통신 중 오류가 발생했습니다.");
             document.getElementById("loading").style.display = "none";
         }
     };

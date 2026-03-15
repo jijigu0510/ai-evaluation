@@ -9,28 +9,52 @@
     <!-- 마크다운 렌더링을 위한 marked 라이브러리 추가 -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
-        body { font-family: 'Malgun Gothic', sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; }
-        .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        h1 { text-align: center; color: #2c3e50; }
-        .form-section { background: #f9fbfb; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e1e8ed; }
-        .form-section h3 { margin-top: 0; color: #34495e; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
-        .form-group { margin-bottom: 15px; }
-        label { font-weight: bold; display: block; margin-bottom: 8px; font-size: 14px; color: #555; }
-        select, input[type="file"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
-        button { width: 100%; padding: 15px; background: #2980b9; color: white; border: none; font-size: 16px; font-weight: bold; border-radius: 5px; cursor: pointer; margin-top: 10px; transition: background 0.3s;}
-        button:hover { background: #3498db; }
-        button.secondary { background: #27ae60; }
-        button.secondary:hover { background: #2ecc71; }
-        #resultArea { margin-top: 30px; padding: 20px; background: #fff; border: 1px solid #e1e8ed; border-radius: 5px; line-height: 1.6; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.05);}
-        .loading { text-align: center; color: #e67e22; font-weight: bold; display: none; margin-top: 15px; padding: 10px; border: 1px solid #f39c12; border-radius: 5px; background: #fdfae3;}
-        .student-select-area { display: none; margin-top: 15px; }
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+        
+        body { font-family: 'Pretendard', 'Malgun Gothic', sans-serif; background-color: #f3f4f6; margin: 0; padding: 40px 20px; color: #1f2937; }
+        .container { max-width: 850px; margin: 0 auto; background: #ffffff; padding: 40px; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.01); }
+        h1 { text-align: center; color: #111827; font-weight: 800; font-size: 26px; margin-bottom: 30px; letter-spacing: -0.5px; }
+        
+        .form-section { background: #ffffff; padding: 25px; border-radius: 12px; margin-bottom: 25px; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+        .form-section h3 { margin-top: 0; color: #374151; font-size: 16px; font-weight: 700; border-bottom: 2px solid #f3f4f6; padding-bottom: 12px; margin-bottom: 20px; }
+        
+        /* 컴팩트한 파일 업로드 그리드 */
+        .upload-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 20px; }
+        @media (max-width: 600px) { .upload-grid { grid-template-columns: 1fr; } }
+        .upload-item { background: #f9fafb; border: 1px dashed #d1d5db; padding: 12px 15px; border-radius: 8px; display: flex; flex-direction: column; gap: 8px; transition: all 0.2s ease; }
+        .upload-item:hover { border-color: #60a5fa; background: #eff6ff; }
+        .upload-item label { font-weight: 600; font-size: 13px; color: #4b5563; }
+        .upload-item input[type="file"] { width: 100%; font-size: 12px; color: #6b7280; cursor: pointer; }
+        .upload-item input[type="file"]::file-selector-button { padding: 6px 12px; border-radius: 6px; border: 1px solid #d1d5db; background: white; color: #374151; cursor: pointer; transition: all 0.2s; margin-right: 10px; font-weight: 500;}
+        .upload-item input[type="file"]::file-selector-button:hover { background: #f3f4f6; }
+
+        /* 셀렉트 박스 3단 그리드 */
+        .select-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        @media (max-width: 600px) { .select-grid { grid-template-columns: 1fr; } }
+        .form-group label { font-weight: 600; display: block; margin-bottom: 8px; font-size: 13px; color: #4b5563; }
+        select { width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; box-sizing: border-box; background-color: #f9fafb; color: #1f2937; font-size: 14px; outline: none; transition: border-color 0.2s, box-shadow 0.2s; cursor: pointer; }
+        select:focus { border-color: #3b82f6; background-color: #fff; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        
+        /* 버튼 스타일링 */
+        button { width: 100%; padding: 15px; background: #2563eb; color: white; border: none; font-size: 16px; font-weight: 700; border-radius: 10px; cursor: pointer; margin-top: 10px; transition: all 0.2s ease; }
+        button:hover { background: #1d4ed8; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2); }
+        button:active { transform: translateY(1px); }
+        button.secondary { background: #10b981; width: auto; padding: 10px 20px; display: block; margin: 0 auto; font-size: 14px; font-weight: 600; border-radius: 8px; }
+        button.secondary:hover { background: #059669; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); }
+
+        /* 결과 및 로딩 영역 */
+        #resultArea { margin-top: 30px; padding: 30px; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; line-height: 1.7; display: none; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        .loading { text-align: center; color: #b45309; font-weight: 600; display: none; margin-top: 20px; padding: 15px; border: 1px solid #fde68a; border-radius: 10px; background: #fffbeb; animation: pulse 2s infinite; font-size: 14px;}
+        .student-select-area { display: none; margin-top: 20px; padding-top: 20px; border-top: 1px dashed #d1d5db; }
+        
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
         
         /* 마크다운 렌더링 스타일 보강 */
-        #resultArea h2 { color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 0;}
-        #resultArea h3 { color: #2980b9; margin-top: 20px; }
-        #resultArea ul { padding-left: 20px; }
+        #resultArea h2 { color: #111827; border-bottom: 2px solid #f3f4f6; padding-bottom: 12px; margin-top: 0; font-size: 20px; }
+        #resultArea h3 { color: #2563eb; margin-top: 25px; font-size: 17px; }
+        #resultArea ul { padding-left: 20px; color: #374151; }
         #resultArea li { margin-bottom: 8px; }
-        #resultArea strong { color: #c0392b; }
+        #resultArea strong { color: #b91c1c; }
     </style>
 </head>
 <body>
@@ -40,42 +64,46 @@
     
     <!-- 파일 업로드 영역 -->
     <div class="form-section">
-        <h3>1. 학생부 데이터 업로드 (엑셀/CSV)</h3>
-        <div class="form-group">
-            <label for="fileProfile">인적사항 / 학년이력 파일</label>
-            <input type="file" id="fileProfile" accept=".xlsx, .xls, .csv">
-        </div>
-        <div class="form-group">
-            <label for="fileSubject">교과세특 파일</label>
-            <input type="file" id="fileSubject" accept=".xlsx, .xls, .csv">
-        </div>
-        <div class="form-group">
-            <label for="fileActivity">창체세특 파일</label>
-            <input type="file" id="fileActivity" accept=".xlsx, .xls, .csv">
-        </div>
-        <div class="form-group">
-            <label for="fileBehavior">행특세특 파일</label>
-            <input type="file" id="fileBehavior" accept=".xlsx, .xls, .csv">
+        <h3>1. 학생부 데이터 업로드</h3>
+        <div class="upload-grid">
+            <div class="upload-item">
+                <label for="fileProfile">📁 인적사항 / 학년이력</label>
+                <input type="file" id="fileProfile" accept=".xlsx, .xls, .csv">
+            </div>
+            <div class="upload-item">
+                <label for="fileSubject">📝 교과세특</label>
+                <input type="file" id="fileSubject" accept=".xlsx, .xls, .csv">
+            </div>
+            <div class="upload-item">
+                <label for="fileActivity">💡 창체세특</label>
+                <input type="file" id="fileActivity" accept=".xlsx, .xls, .csv">
+            </div>
+            <div class="upload-item">
+                <label for="fileBehavior">🤝 행특세특</label>
+                <input type="file" id="fileBehavior" accept=".xlsx, .xls, .csv">
+            </div>
         </div>
         
         <button class="secondary" onclick="parseAndGroupFiles()">데이터 취합 및 학생 목록 불러오기</button>
-        <div id="parseMessage" style="text-align:center; margin-top:10px; color:#27ae60; font-weight:bold;"></div>
+        <div id="parseMessage" style="text-align:center; margin-top:15px; font-weight:600; font-size:13px;"></div>
     </div>
 
     <!-- 평가 설정 영역 -->
     <div class="form-section">
         <h3>2. 지원 대학 및 학생 선택</h3>
-        <div class="form-group">
-            <label for="university">대학 선택</label>
-            <select id="university" onchange="updateCategory()"></select>
-        </div>
-        <div class="form-group">
-            <label for="category">계열 선택</label>
-            <select id="category" onchange="updateDepartment()"></select>
-        </div>
-        <div class="form-group">
-            <label for="department">학과 선택</label>
-            <select id="department"></select>
+        <div class="select-grid">
+            <div class="form-group">
+                <label for="university">대학 선택</label>
+                <select id="university" onchange="updateCategory()"></select>
+            </div>
+            <div class="form-group">
+                <label for="category">계열 선택</label>
+                <select id="category" onchange="updateDepartment()"></select>
+            </div>
+            <div class="form-group">
+                <label for="department">학과 선택</label>
+                <select id="department"></select>
+            </div>
         </div>
 
         <div class="form-group student-select-area" id="studentSelectGroup">

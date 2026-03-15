@@ -18,12 +18,18 @@ if (!apiKey) {
 }
 
 app.post('/api/evaluate', async (req, res) => {
-    // 프론트엔드에서 넘겨주는 studentName도 함께 받도록 수정했습니다.
+    console.log("🟢 [서버] 프론트엔드로부터 평가 요청이 들어왔습니다!");
+
+    // 프론트엔드에서 넘겨주는 데이터 받기
     const { university, category, department, studentName, studentData } = req.body;
 
     if (!apiKey) {
-        return res.status(500).json({ error: '서버에 API 키가 설정되지 않았습니다. 관리자에게 문의하세요.' });
+        console.error("🔴 [서버 에러] API 키가 없습니다. Render 환경 변수를 확인하세요.");
+        return res.status(500).json({ error: '서버에 API 키가 설정되지 않았습니다. Render 환경 변수(Environment Variables)에서 GEMINI_API_KEY를 추가해주세요.' });
     }
+
+    console.log(`📝 평가 대상: [${university}] ${department} - ${studentName || '이름 없음'} 학생`);
+    console.log(`📊 학생 데이터 크기: 약 ${JSON.stringify(studentData).length} 바이트`);
 
     // 작성해주신 대학별 룰셋과 학생 데이터를 결합한 통합 프롬프트
     const prompt = `
@@ -113,6 +119,8 @@ ${JSON.stringify(studentData, null, 2)}
         // 패키지 문제 충돌을 막기 위해 Node.js 내장 fetch API를 직접 사용합니다.
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
         
+        console.log("⏳ [서버] Gemini API로 전송 중...");
+
         const response = await fetch(geminiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -125,19 +133,25 @@ ${JSON.stringify(studentData, null, 2)}
 
         // Gemini API 측에서 에러를 반환했을 경우 처리
         if (!response.ok) {
-            console.error("Gemini API 에러:", data);
-            return res.status(500).json({ error: data.error?.message || 'Gemini API 호출 중 문제가 발생했습니다.' });
+            console.error("🔴 [Gemini API 에러 상세]:", JSON.stringify(data, null, 2));
+            return res.status(500).json({ error: `[구글 AI 에러] ${data.error?.message || '알 수 없는 API 에러'}` });
         }
 
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) {
+            console.error("🔴 [Gemini API 빈 응답]:", JSON.stringify(data, null, 2));
+            return res.status(500).json({ error: 'AI가 정상적인 텍스트 응답을 생성하지 못했습니다.' });
+        }
+
+        console.log("✅ [서버] AI 평가 완료! 프론트엔드로 전달합니다.");
         res.json({ result: text });
 
     } catch (error) {
-        console.error("AI 평가 중 서버 오류 발생:", error);
-        res.status(500).json({ error: error.message || 'AI 평가 중 오류가 발생했습니다.' });
+        console.error("🔴 [서버 내부 에러]:", error);
+        res.status(500).json({ error: `[서버 내부 문제] ${error.message}` });
     }
 });
 
 // Render가 제공하는 동적 포트를 우선적으로 사용합니다.
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`서버가 포트 ${PORT} 에서 실행 중입니다.`));
+app.listen(PORT, () => console.log(`🚀 서버가 포트 ${PORT} 에서 실행 중입니다.`));

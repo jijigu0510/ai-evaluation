@@ -4,7 +4,8 @@ const cors = require('cors');
 const path = require('path');
 
 const app = express();
-app.use(cors());
+// CORS를 완전히 개방하여 로컬/배포 환경 어디서든 통신 가능하게 설정
+app.use(cors({ origin: '*' })); 
 app.use(express.json({ limit: '50mb' })); // 대용량 텍스트(엑셀 데이터) 처리용
 
 // 현재 폴더의 파일들(index.html 등)을 웹에서 접근할 수 있도록 서빙합니다.
@@ -14,25 +15,28 @@ app.use(express.static(__dirname));
 const apiKey = process.env.GEMINI_API_KEY;
 
 if (!apiKey) {
-    console.warn("⚠️ 경고: GEMINI_API_KEY 환경 변수가 설정되지 않았습니다. AI 평가가 작동하지 않을 수 있습니다.");
+    console.warn("⚠️ 경고: GEMINI_API_KEY 환경 변수가 설정되지 않았습니다.");
 }
+
+// 서버 생존 확인용 테스트 경로 (여기로 접속하면 서버가 켜져있는지 알 수 있습니다)
+app.get('/api/health', (req, res) => {
+    res.json({ status: '정상 작동 중', key_설정여부: !!apiKey });
+});
 
 app.post('/api/evaluate', async (req, res) => {
     console.log("🟢 [서버] 프론트엔드로부터 평가 요청이 들어왔습니다!");
 
-    // 프론트엔드에서 넘겨주는 데이터 받기
-    const { university, category, department, studentName, studentData } = req.body;
+    try {
+        const { university, category, department, studentName, studentData } = req.body;
 
-    if (!apiKey) {
-        console.error("🔴 [서버 에러] API 키가 없습니다. Render 환경 변수를 확인하세요.");
-        return res.status(500).json({ error: '서버에 API 키가 설정되지 않았습니다. Render 환경 변수(Environment Variables)에서 GEMINI_API_KEY를 추가해주세요.' });
-    }
+        if (!apiKey) {
+            throw new Error('서버에 API 키가 없습니다. Render 대시보드의 Environment 탭에서 GEMINI_API_KEY를 추가해주세요.');
+        }
 
-    console.log(`📝 평가 대상: [${university}] ${department} - ${studentName || '이름 없음'} 학생`);
-    console.log(`📊 학생 데이터 크기: 약 ${JSON.stringify(studentData).length} 바이트`);
+        console.log(`📝 평가 대상: [${university}] ${department} - ${studentName || '이름 없음'} 학생`);
+        console.log(`📊 학생 데이터 크기: 약 ${JSON.stringify(studentData).length} 바이트`);
 
-    // 작성해주신 대학별 룰셋과 학생 데이터를 결합한 통합 프롬프트
-    const prompt = `
+        const prompt = `
 너는 대한민국 최상위 12개 대학(서울대, 연세대, 고려대, 서강대, 한양대, 중앙대, 경희대, 한국외대, 서울시립대, 건국대, 동국대, 홍익대)의 학생부종합전형을 심층 평가하는 수석 입학사정관 시스템이야.
 지금부터 아래 제공된 [지원 대상 정보]와 [학생부 데이터]를 바탕으로, 네가 가진 데이터베이스와 <대학별 특별 평가 룰셋>을 엄격하게 적용하여 학생의 서류를 분석하고 채점표를 작성해 줘.
 
@@ -115,8 +119,6 @@ ${JSON.stringify(studentData, null, 2)}
 - 이 서류를 바탕으로 실제 대학 면접에서 물어볼 만한 날카로운 꼬리 질문 2개 생성.
 `;
 
-    try {
-        // ★ 핵심 수정 사항: 사용할 수 있는 올바른 모델 이름(gemini-1.5-flash)으로 변경했습니다.
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
         
         console.log("⏳ [서버] Gemini API로 전송 중...");
@@ -129,35 +131,29 @@ ${JSON.stringify(studentData, null, 2)}
             })
         });
 
-        let data;
-        try {
-            data = await response.json();
-        } catch (parseErr) {
-            console.error("🔴 [JSON 파싱 에러]: 구글 서버가 불안정합니다.", parseErr);
-            return res.status(500).json({ error: '구글 AI 서버에서 올바르지 않은 응답을 반환했습니다. 잠시 후 다시 시도해주세요.' });
-        }
-
-        // Gemini API 측에서 에러를 반환했을 경우 처리
         if (!response.ok) {
-            console.error("🔴 [Gemini API 에러 상세]:", JSON.stringify(data, null, 2));
-            return res.status(500).json({ error: `[구글 AI 에러] ${data.error?.message || '알 수 없는 API 에러'}` });
+            const errorText = await response.text();
+            console.error(`🔴 [구글 AI 에러]: ${response.status} - ${errorText}`);
+            throw new Error(`구글 AI API 연동 실패 (상태코드: ${response.status})`);
         }
 
+        const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        
         if (!text) {
-            console.error("🔴 [Gemini API 빈 응답]:", JSON.stringify(data, null, 2));
-            return res.status(500).json({ error: 'AI가 정상적인 텍스트 응답을 생성하지 못했습니다.' });
+            throw new Error('AI가 응답을 거부했거나 텍스트를 만들지 못했습니다.');
         }
 
         console.log("✅ [서버] AI 평가 완료! 프론트엔드로 전달합니다.");
-        res.json({ result: text });
+        // 에러를 뿜지 않고 무조건 200 성공으로 보내어 프론트엔드가 결과를 잘 받게 만듦
+        res.status(200).json({ result: text });
 
     } catch (error) {
-        console.error("🔴 [서버 내부 에러]:", error);
-        res.status(500).json({ error: `[서버 내부 문제] ${error.message}` });
+        console.error("🔴 [서버 내부 에러]:", error.message);
+        // 서버가 죽지 않고 프론트엔드에게 어떤 에러인지 한글로 친절히 알려줌
+        res.status(400).json({ error: error.message });
     }
 });
 
-// Render가 제공하는 동적 포트를 우선적으로 사용합니다.
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 서버가 포트 ${PORT} 에서 실행 중입니다.`));

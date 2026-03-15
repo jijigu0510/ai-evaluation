@@ -1,7 +1,7 @@
 // server.js
 const express = require('express');
 const cors = require('cors');
-const { GoogleGenerativeAI } = require('@google/genai');
+const { GoogleGenAI } = require('@google/genai');
 const path = require('path');
 
 const app = express();
@@ -19,7 +19,7 @@ if (!apiKey) {
     console.warn("⚠️ 경고: GEMINI_API_KEY 환경 변수가 설정되지 않았습니다. AI 평가가 작동하지 않을 수 있습니다.");
 }
 
-const ai = new GoogleGenerativeAI({ apiKey: apiKey });
+const ai = new GoogleGenAI({ apiKey: apiKey });
 
 app.post('/api/evaluate', async (req, res) => {
     const { university, category, department, studentData } = req.body;

@@ -1,7 +1,6 @@
 // server.js
 const express = require('express');
 const cors = require('cors');
-const { GoogleGenAI } = require('@google/genai');
 const path = require('path');
 
 const app = express();
@@ -18,10 +17,9 @@ if (!apiKey) {
     console.warn("⚠️ 경고: GEMINI_API_KEY 환경 변수가 설정되지 않았습니다. AI 평가가 작동하지 않을 수 있습니다.");
 }
 
-const ai = new GoogleGenAI({ apiKey: apiKey });
-
 app.post('/api/evaluate', async (req, res) => {
-    const { university, category, department, studentData } = req.body;
+    // 프론트엔드에서 넘겨주는 studentName도 함께 받도록 수정했습니다.
+    const { university, category, department, studentName, studentData } = req.body;
 
     if (!apiKey) {
         return res.status(500).json({ error: '서버에 API 키가 설정되지 않았습니다. 관리자에게 문의하세요.' });
@@ -36,6 +34,7 @@ app.post('/api/evaluate', async (req, res) => {
 - 지원 대학: ${university}
 - 지원 계열: ${category}
 - 지원 학과: ${department}
+- 평가 대상 학생: ${studentName || '이름 없음'}
 
 [학생부 데이터]
 ${JSON.stringify(studentData, null, 2)}
@@ -111,14 +110,31 @@ ${JSON.stringify(studentData, null, 2)}
 `;
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
+        // 패키지 문제 충돌을 막기 위해 Node.js 내장 fetch API를 직접 사용합니다.
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        
+        const response = await fetch(geminiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }]
+            })
         });
-        res.json({ result: response.text });
+
+        const data = await response.json();
+
+        // Gemini API 측에서 에러를 반환했을 경우 처리
+        if (!response.ok) {
+            console.error("Gemini API 에러:", data);
+            return res.status(500).json({ error: data.error?.message || 'Gemini API 호출 중 문제가 발생했습니다.' });
+        }
+
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        res.json({ result: text });
+
     } catch (error) {
-        console.error("AI 평가 중 오류 발생:", error);
-        res.status(500).json({ error: 'AI 평가 중 오류가 발생했습니다.' });
+        console.error("AI 평가 중 서버 오류 발생:", error);
+        res.status(500).json({ error: error.message || 'AI 평가 중 오류가 발생했습니다.' });
     }
 });
 

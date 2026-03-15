@@ -65,7 +65,7 @@ ${JSON.stringify(studentData, null, 2)}
 - 주안점: 학생부에 나타난 학생의 자기주도적 성취, 실용적 문제해결력(IC-PBL 성향), 그리고 지식을 실제 현실의 문제나 데이터에 적용해 본 융복합 탐구 역량을 중시.
 
 5. [중앙대학교]
-- 전형 분리 평가: 'CAU융합형(학업50/진로30/공동체20)'인지 'CAU탐구형(진로50/학업40/공동체10)'인지 파악.
+- 전형 분리 평가: 'CAU융합형(학업50/진로30/공동체20)'인지 'CAU탐구형(진로50/학업40/공동체10)' 파악.
 - 탐구형의 경우, 전공 관련 깊이 있는 심화 탐구 역량과 동기-과정-결과-성장의 논리적 연결을 매우 깐깐하게 채점.
 
 6. [경희대학교]
@@ -116,8 +116,8 @@ ${JSON.stringify(studentData, null, 2)}
 `;
 
     try {
-        // 패키지 문제 충돌을 막기 위해 Node.js 내장 fetch API를 직접 사용합니다.
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        // ★ 핵심 수정 사항: 사용할 수 있는 올바른 모델 이름(gemini-1.5-flash)으로 변경했습니다.
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
         
         console.log("⏳ [서버] Gemini API로 전송 중...");
 
@@ -129,7 +129,13 @@ ${JSON.stringify(studentData, null, 2)}
             })
         });
 
-        const data = await response.json();
+        let data;
+        try {
+            data = await response.json();
+        } catch (parseErr) {
+            console.error("🔴 [JSON 파싱 에러]: 구글 서버가 불안정합니다.", parseErr);
+            return res.status(500).json({ error: '구글 AI 서버에서 올바르지 않은 응답을 반환했습니다. 잠시 후 다시 시도해주세요.' });
+        }
 
         // Gemini API 측에서 에러를 반환했을 경우 처리
         if (!response.ok) {

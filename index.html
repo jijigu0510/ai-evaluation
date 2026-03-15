@@ -2,9 +2,12 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI 대학 입학사정관 시스템</title>
     <!-- 엑셀 파싱을 위한 SheetJS 라이브러리 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- 마크다운 렌더링을 위한 marked 라이브러리 추가 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; }
         .container { max-width: 900px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
@@ -14,13 +17,20 @@
         .form-group { margin-bottom: 15px; }
         label { font-weight: bold; display: block; margin-bottom: 8px; font-size: 14px; color: #555; }
         select, input[type="file"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
-        button { width: 100%; padding: 15px; background: #2980b9; color: white; border: none; font-size: 16px; font-weight: bold; border-radius: 5px; cursor: pointer; margin-top: 10px; }
+        button { width: 100%; padding: 15px; background: #2980b9; color: white; border: none; font-size: 16px; font-weight: bold; border-radius: 5px; cursor: pointer; margin-top: 10px; transition: background 0.3s;}
         button:hover { background: #3498db; }
         button.secondary { background: #27ae60; }
         button.secondary:hover { background: #2ecc71; }
-        #resultArea { margin-top: 30px; padding: 20px; background: #ecf0f1; border-radius: 5px; white-space: pre-wrap; line-height: 1.6; display: none;}
-        .loading { text-align: center; color: #e67e22; font-weight: bold; display: none; margin-top: 15px;}
+        #resultArea { margin-top: 30px; padding: 20px; background: #fff; border: 1px solid #e1e8ed; border-radius: 5px; line-height: 1.6; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.05);}
+        .loading { text-align: center; color: #e67e22; font-weight: bold; display: none; margin-top: 15px; padding: 10px; border: 1px solid #f39c12; border-radius: 5px; background: #fdfae3;}
         .student-select-area { display: none; margin-top: 15px; }
+        
+        /* 마크다운 렌더링 스타일 보강 */
+        #resultArea h2 { color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 0;}
+        #resultArea h3 { color: #2980b9; margin-top: 20px; }
+        #resultArea ul { padding-left: 20px; }
+        #resultArea li { margin-bottom: 8px; }
+        #resultArea strong { color: #c0392b; }
     </style>
 </head>
 <body>
@@ -77,7 +87,7 @@
     </div>
 
     <button onclick="evaluateStudent()">선택 학생 입학사정관 AI 평가 시작</button>
-    <div id="loading" class="loading">AI가 해당 학생의 데이터를 엄격하게 심층 분석 중입니다... (약 10~20초 소요)</div>
+    <div id="loading" class="loading">⏳ AI가 해당 학생의 데이터를 엄격하게 심층 분석 중입니다... (약 10~20초 소요)</div>
     
     <!-- 결과 출력 영역 -->
     <div id="resultArea"></div>
@@ -100,7 +110,7 @@ const univData = {
     "홍익대학교": { "자유전공": ["캠퍼스자율전공(자연·예능)", "캠퍼스자율전공(인문·예능)"], "공과/IT계열": ["디자인엔지니어링전공", "지능·로봇공학", "스마트도시·데이터사이언스전공"], "예술/건축": ["건축학부", "미술대학(디자인학부)"] }
 };
 
-let aggregatedStudentsData = {}; // 학생별로 취합된 데이터를 저장할 객체
+let aggregatedStudentsData = {};
 
 window.onload = function() {
     const univSelect = document.getElementById("university");
@@ -135,7 +145,6 @@ function updateDepartment() {
     }
 }
 
-// 나이스(NEIS) 엑셀/CSV 양식을 메타데이터 포함 2차원 배열로 읽어오는 함수
 function readFileAs2DArray(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -145,8 +154,6 @@ function readFileAs2DArray(file) {
                 const workbook = XLSX.read(data, {type: 'array'});
                 const firstSheetName = workbook.SheetNames[0];
                 const sheet = workbook.Sheets[firstSheetName];
-                
-                // header: 1 옵션을 주어 빈칸을 포함한 2차원 배열 그대로 가져옴
                 const rows = XLSX.utils.sheet_to_json(sheet, {header: 1, defval: ''});
                 resolve(rows);
             } catch (err) {
@@ -158,7 +165,6 @@ function readFileAs2DArray(file) {
     });
 }
 
-// 4개의 파일을 읽어서 학생 이름('성명')을 기준으로 묶어주는 함수
 async function parseAndGroupFiles() {
     const fileInputs = [
         { id: 'fileProfile', key: '인적사항' },
@@ -171,6 +177,7 @@ async function parseAndGroupFiles() {
     let hasData = false;
 
     document.getElementById("parseMessage").innerText = "나이스(NEIS) 데이터를 취합 중입니다...";
+    document.getElementById("parseMessage").style.color = "#e67e22";
 
     for (let inputInfo of fileInputs) {
         const fileElement = document.getElementById(inputInfo.id);
@@ -182,7 +189,6 @@ async function parseAndGroupFiles() {
                 let headerRowIdx = -1;
                 let nameColIdx = -1;
 
-                // 1. 위쪽 빈칸/메타데이터를 무시하고 실제 '성명' 헤더 위치 찾기
                 for (let r = 0; r < rows.length; r++) {
                     for (let c = 0; c < rows[r].length; c++) {
                         if (String(rows[r][c]).replace(/\s/g, '') === '성명') {
@@ -198,19 +204,13 @@ async function parseAndGroupFiles() {
                     const headers = rows[headerRowIdx];
                     let currentStudentName = "";
 
-                    // 2. 헤더 다음 행부터 순회하며 데이터 적재
                     for (let r = headerRowIdx + 1; r < rows.length; r++) {
                         const row = rows[r];
                         let cellValue = String(row[nameColIdx] || '').trim();
 
-                        // 페이지 넘김으로 인해 헤더가 다시 등장하는 경우 무시
-                        if (cellValue.replace(/\s/g, '') === '성명' || String(row[0]||'').replace(/\s/g, '') === '번호') {
-                            continue;
-                        }
+                        if (cellValue.replace(/\s/g, '') === '성명' || String(row[0]||'').replace(/\s/g, '') === '번호') continue;
 
-                        // 나이스 엑셀의 이름 셀 병합 대응: 성명 칸이 비어있으면 직전 학생의 이름 유지
                         if (cellValue !== "") {
-                            // "김 건" 처럼 이름 사이에 있는 띄어쓰기를 모두 제거하여 일관성 유지
                             currentStudentName = cellValue.replace(/\s/g, '');
                         }
 
@@ -222,18 +222,14 @@ async function parseAndGroupFiles() {
                             let rowData = {};
                             let isEmptyRow = true;
 
-                            // 해당 줄의 데이터를 묶어주기
                             for (let c = 0; c < headers.length; c++) {
                                 let key = String(headers[c] || '').trim();
-                                if (!key) key = `항목${c+1}`; // 헤더가 빈칸일 경우 대비
+                                if (!key) key = `항목${c+1}`;
                                 
                                 rowData[key] = row[c];
-                                if (String(row[c]).trim() !== "") {
-                                    isEmptyRow = false; // 데이터가 하나라도 있으면 빈 줄 아님
-                                }
+                                if (String(row[c]).trim() !== "") isEmptyRow = false;
                             }
                             
-                            // 완전히 빈 줄(페이지 여백 등)이 아니라면 추가
                             if (!isEmptyRow) {
                                 aggregatedStudentsData[currentStudentName][inputInfo.key].push(rowData);
                             }
@@ -249,24 +245,23 @@ async function parseAndGroupFiles() {
 
     if (!hasData) {
         document.getElementById("parseMessage").innerText = "업로드된 파일이 없습니다. 최소 1개 이상의 파일을 선택해주세요.";
+        document.getElementById("parseMessage").style.color = "#e74c3c";
         return;
     }
 
-    // 학생 선택 드롭다운 채우기
     const studentSelect = document.getElementById("studentSelect");
     studentSelect.innerHTML = "<option value=''>평가할 학생을 선택하세요</option>";
     
-    // 학생 이름 가나다 순 정렬
     const studentNames = Object.keys(aggregatedStudentsData).sort();
     studentNames.forEach(name => {
         studentSelect.innerHTML += `<option value='${name}'>${name}</option>`;
     });
 
     document.getElementById("studentSelectGroup").style.display = "block";
+    document.getElementById("parseMessage").style.color = "#27ae60";
     document.getElementById("parseMessage").innerText = `✅ 총 ${studentNames.length}명의 학생 데이터가 성공적으로 취합되었습니다!`;
 }
 
-// 단일 학생에 대한 평가 실행
 async function evaluateStudent() {
     const university = document.getElementById("university").value;
     const category = document.getElementById("category").value;
@@ -285,7 +280,6 @@ async function evaluateStudent() {
     document.getElementById("loading").style.display = "block";
     document.getElementById("resultArea").style.display = "none";
 
-    // 선택된 학생의 취합된 데이터만 백엔드로 전송
     const studentData = aggregatedStudentsData[studentName];
 
     try {
@@ -295,20 +289,28 @@ async function evaluateStudent() {
             body: JSON.stringify({ university, category, department, studentName, studentData })
         });
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
         const resultData = await response.json();
-        
+
         document.getElementById("loading").style.display = "none";
         document.getElementById("resultArea").style.display = "block";
-        document.getElementById("resultArea").innerText = resultData.result;
+
+        if (!response.ok) {
+            // 서버에서 에러를 내려보낸 경우
+            throw new Error(resultData.error || `HTTP error! status: ${response.status}`);
+        }
+
+        // 성공 시: marked.js를 사용하여 마크다운을 HTML로 변환 후 출력
+        document.getElementById("resultArea").innerHTML = marked.parse(resultData.result);
 
     } catch (error) {
         console.error(error);
-        alert("서버 통신 중 오류가 발생했습니다.");
         document.getElementById("loading").style.display = "none";
+        document.getElementById("resultArea").style.display = "block";
+        document.getElementById("resultArea").innerHTML = `
+            <h3 style="color:#e74c3c;">❌ 평가 중 오류가 발생했습니다.</h3>
+            <p><strong>상세 내용:</strong> ${error.message}</p>
+            <p>서버 터미널의 에러 로그를 확인하시거나 API 키 설정을 확인해주세요.</p>
+        `;
     }
 }
 </script>
